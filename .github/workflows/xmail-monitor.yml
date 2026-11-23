@@ -23,7 +23,22 @@ jobs:
         with:
           persist-credentials: true
 
+      - name: Check required secrets
+        id: config
+        env:
+          IMAP_USER: ${{ secrets.XMAIL_IMAP_USER }}
+          IMAP_PASSWORD: ${{ secrets.XMAIL_IMAP_PASSWORD }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          if [[ -z "$IMAP_USER" || -z "$IMAP_PASSWORD" || -z "$TELEGRAM_BOT_TOKEN" ]]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Add XMAIL_IMAP_USER, XMAIL_IMAP_PASSWORD and TELEGRAM_BOT_TOKEN in repository Actions secrets."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run read-only IMAP monitor
+        if: steps.config.outputs.configured == 'true'
         env:
           IMAP_HOST: imap.x-mail.ru
           IMAP_PORT: "993"
@@ -36,7 +51,7 @@ jobs:
         run: python3 mail-monitor/monitor.py
 
       - name: Save the processed-message checkpoint
-        if: always()
+        if: always() && steps.config.outputs.configured == 'true'
         run: |
           if git diff --quiet -- mail-monitor/state.json; then
             echo "No checkpoint changes to save."
