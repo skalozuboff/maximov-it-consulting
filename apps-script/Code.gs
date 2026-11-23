@@ -6,7 +6,7 @@ const CONFIG = {
 
 function doPost(e) {
   try {
-    const data = JSON.parse((e.postData && e.postData.contents) || "{}");
+    const data = (e && e.parameter && Object.keys(e.parameter).length) ? e.parameter : JSON.parse((e && e.postData && e.postData.contents) || "{}");
     if (data.website) return resultPage(true, "ok");
     const company = clean(data.company, 120);
     const contact = clean(data.contact, 160);
@@ -15,17 +15,11 @@ function doPost(e) {
       return resultPage(false, "Заполните все поля корректно.");
     }
 
-    const lock = LockService.getScriptLock();
-    if (!lock.tryLock(3000)) return resultPage(false, "Попробуйте отправить заявку чуть позже.");
-    try {
-      const props = PropertiesService.getScriptProperties();
-      const now = Date.now();
-      const last = Number(props.getProperty("lastSubmission") || 0);
-      if (now - last < 30000) return resultPage(false, "Подождите 30 секунд перед следующей отправкой.");
-      props.setProperty("lastSubmission", String(now));
-    } finally {
-      lock.releaseLock();
-    }
+    const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, contact.toLowerCase());
+    const throttleKey = "last_" + Utilities.base64EncodeWebSafe(digest).slice(0, 32);
+    const cache = CacheService.getScriptCache();
+    if (cache.get(throttleKey)) return resultPage(false, "Подождите 30 секунд перед следующей отправкой.");
+    cache.put(throttleKey, "1", 30);
 
     const message = [
       "Новая заявка с сайта max-cio.ru",
