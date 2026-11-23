@@ -1,5 +1,5 @@
 const CONFIG = {
-  email: "andrei@max-cio.ru",
+  email: "info@max-cio.ru",
   chatId: "33061519",
   allowedOrigin: "https://max-cio.ru"
 };
