@@ -5,20 +5,27 @@ const CONFIG = {
 };
 
 function doPost(e) {
+  const data = (e && e.parameter && Object.keys(e.parameter).length)
+    ? e.parameter
+    : JSON.parse((e && e.postData && e.postData.contents) || "{}");
+  const nonce = clean(data.nonce, 80);
+
   try {
-    const data = (e && e.parameter && Object.keys(e.parameter).length) ? e.parameter : JSON.parse((e && e.postData && e.postData.contents) || "{}");
-    if (data.website) return resultPage(true, "ok");
+    if (data.website) return resultPage(true, "ok", nonce);
+
     const company = clean(data.company, 120);
     const contact = clean(data.contact, 160);
     const task = clean(data.task, 3000);
     if (company.length < 2 || contact.length < 3 || task.length < 5) {
-      return resultPage(false, "Заполните все поля корректно.");
+      return resultPage(false, "Заполните все поля корректно.", nonce);
     }
 
     const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, contact.toLowerCase());
     const throttleKey = "last_" + Utilities.base64EncodeWebSafe(digest).slice(0, 32);
     const cache = CacheService.getScriptCache();
-    if (cache.get(throttleKey)) return resultPage(false, "Подождите 30 секунд перед следующей отправкой.");
+    if (cache.get(throttleKey)) {
+      return resultPage(false, "Подождите 30 секунд перед следующей отправкой.", nonce);
+    }
     cache.put(throttleKey, "1", 30);
 
     const message = [
@@ -33,7 +40,6 @@ function doPost(e) {
 
     let telegramSent = false;
     let emailSent = false;
-    const errors = [];
 
     try {
       const token = PropertiesService.getScriptProperties().getProperty("TELEGRAM_BOT_TOKEN");
@@ -49,7 +55,6 @@ function doPost(e) {
       telegramSent = true;
     } catch (telegramError) {
       console.error("Telegram delivery error: " + telegramError.message);
-      errors.push("telegram");
     }
 
     try {
@@ -59,17 +64,16 @@ function doPost(e) {
       emailSent = true;
     } catch (emailError) {
       console.error("Email delivery error: " + emailError.message);
-      errors.push("email");
     }
 
     if (!telegramSent && !emailSent) throw new Error("Both notification channels failed");
     const confirmation = telegramSent && emailSent
       ? "Заявка отправлена. Спасибо! Я свяжусь с вами по указанному контакту."
       : "Заявка принята, но один из каналов уведомления временно недоступен.";
-    return resultPage(true, confirmation);
+    return resultPage(true, confirmation, nonce);
   } catch (err) {
     console.error(err);
-    return resultPage(false, "Не удалось отправить заявку. Попробуйте ещё раз или напишите напрямую на " + CONFIG.email + ".");
+    return resultPage(false, "Не удалось отправить заявку. Попробуйте ещё раз или напишите напрямую на " + CONFIG.email + ".", nonce);
   }
 }
 
@@ -77,16 +81,21 @@ function clean(value, maxLength) {
   return String(value || "").replace(/[<>]/g, "").trim().slice(0, maxLength);
 }
 
-function resultPage(ok, message) {
-  const payload = JSON.stringify({ source: "max-cio-inquiry", ok: ok, message: message });
+function resultPage(ok, message, nonce) {
+  const payload = JSON.stringify({
+    source: "max-cio-inquiry",
+    ok: ok,
+    message: message,
+    nonce: nonce || ""
+  });
+  const safeMessage = String(message).replace(/[&<>]/g, "");
   return HtmlService.createHtmlOutput(
     '<!doctype html><html><head><meta charset="utf-8"></head><body><script>' +
     'window.top.postMessage(' + payload + ', "*");' +
-    '</script><p>' + message.replace(/[&<>]/g, "") + '</p></body></html>'
+    '</script><p>' + safeMessage + '</p></body></html>'
   ).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-// Run once from the Apps Script editor to authorize Gmail and external requests.
 function authorizeServices() {
   GmailApp.getAliases();
   UrlFetchApp.fetch("https://api.telegram.org");
