@@ -1,5 +1,5 @@
 const CONFIG = {
-  email: "a.maximoff.spb@gmail.com",
+  email: "andrei@max-cio.ru",
   chatId: "33061519",
   allowedOrigin: "https://max-cio.ru"
 };
@@ -28,7 +28,8 @@ function doPost(e) {
     const message = [
       "Новая заявка с сайта max-cio.ru", "",
       "Компания / отрасль: " + company,
-      "Контакт для ответа: " + contact, "", "Задача:", task
+      "Контакт для ответа: " + contact, "", "Задача:",
+      task
     ].join("\n");
 
     let telegramSent = false, emailSent = false;
