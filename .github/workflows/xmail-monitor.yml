@@ -1,0 +1,49 @@
+name: X-Mail website inquiry monitor
+
+on:
+  schedule:
+    # Every 5 minutes, offset from the top of the hour.
+    - cron: "3-58/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: xmail-website-inquiry-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Run read-only IMAP monitor
+        env:
+          IMAP_HOST: imap.x-mail.ru
+          IMAP_PORT: "993"
+          IMAP_USER: ${{ secrets.XMAIL_IMAP_USER }}
+          IMAP_PASSWORD: ${{ secrets.XMAIL_IMAP_PASSWORD }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: "33061519"
+          TIMEZONE: Europe/Moscow
+          STATE_PATH: mail-monitor/state.json
+        run: python3 mail-monitor/monitor.py
+
+      - name: Save the processed-message checkpoint
+        if: always()
+        run: |
+          if git diff --quiet -- mail-monitor/state.json; then
+            echo "No checkpoint changes to save."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mail-monitor/state.json
+          git commit -m "chore: update X-Mail monitor checkpoint"
+          git push
