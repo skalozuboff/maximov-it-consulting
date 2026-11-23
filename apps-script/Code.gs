@@ -31,23 +31,42 @@ function doPost(e) {
       task
     ].join("\n");
 
-    const token = PropertiesService.getScriptProperties().getProperty("TELEGRAM_BOT_TOKEN");
-    if (!token) throw new Error("Telegram token is not configured");
+    let telegramSent = false;
+    let emailSent = false;
+    const errors = [];
 
-    const tgResponse = UrlFetchApp.fetch("https://api.telegram.org/bot" + token + "/sendMessage", {
-      method: "post",
-      contentType: "application/json",
-      payload: JSON.stringify({ chat_id: CONFIG.chatId, text: message, disable_web_page_preview: true }),
-      muteHttpExceptions: true
-    });
-    const tg = JSON.parse(tgResponse.getContentText());
-    if (!tg.ok) throw new Error("Telegram delivery failed");
+    try {
+      const token = PropertiesService.getScriptProperties().getProperty("TELEGRAM_BOT_TOKEN");
+      if (!token) throw new Error("Telegram token is not configured");
+      const tgResponse = UrlFetchApp.fetch("https://api.telegram.org/bot" + token + "/sendMessage", {
+        method: "post",
+        contentType: "application/json",
+        payload: JSON.stringify({ chat_id: CONFIG.chatId, text: message, disable_web_page_preview: true }),
+        muteHttpExceptions: true
+      });
+      const tg = JSON.parse(tgResponse.getContentText());
+      if (!tg.ok) throw new Error("Telegram delivery failed");
+      telegramSent = true;
+    } catch (telegramError) {
+      console.error("Telegram delivery error: " + telegramError.message);
+      errors.push("telegram");
+    }
 
-    GmailApp.sendEmail(CONFIG.email, "Новая заявка с сайта max-cio.ru", message, {
-      name: "max-cio.ru"
-    });
+    try {
+      GmailApp.sendEmail(CONFIG.email, "Новая заявка с сайта max-cio.ru", message, {
+        name: "max-cio.ru"
+      });
+      emailSent = true;
+    } catch (emailError) {
+      console.error("Email delivery error: " + emailError.message);
+      errors.push("email");
+    }
 
-    return resultPage(true, "Заявка отправлена. Спасибо! Я свяжусь с вами по указанному контакту.");
+    if (!telegramSent && !emailSent) throw new Error("Both notification channels failed");
+    const confirmation = telegramSent && emailSent
+      ? "Заявка отправлена. Спасибо! Я свяжусь с вами по указанному контакту."
+      : "Заявка принята, но один из каналов уведомления временно недоступен.";
+    return resultPage(true, confirmation);
   } catch (err) {
     console.error(err);
     return resultPage(false, "Не удалось отправить заявку. Попробуйте ещё раз или напишите напрямую на " + CONFIG.email + ".");
