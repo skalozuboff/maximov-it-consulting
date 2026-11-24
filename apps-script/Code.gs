@@ -1,5 +1,5 @@
 const CONFIG = {
-  email: "a.maximoff.spb@gmail.com",
+  email: "info@max-cio.ru",
   chatId: "33061519",
   allowedOrigin: "https://max-cio.ru"
 };
@@ -12,7 +12,6 @@ function doPost(e) {
 
   try {
     if (data.website) return resultPage(true, "ok", nonce);
-
     const company = clean(data.company, 120);
     const contact = clean(data.contact, 160);
     const task = clean(data.task, 3000);
@@ -23,48 +22,33 @@ function doPost(e) {
     const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, contact.toLowerCase());
     const throttleKey = "last_" + Utilities.base64EncodeWebSafe(digest).slice(0, 32);
     const cache = CacheService.getScriptCache();
-    if (cache.get(throttleKey)) {
-      return resultPage(false, "Подождите 30 секунд перед следующей отправкой.", nonce);
-    }
+    if (cache.get(throttleKey)) return resultPage(false, "Подождите 30 секунд перед следующей отправкой.", nonce);
     cache.put(throttleKey, "1", 30);
 
     const message = [
-      "Новая заявка с сайта max-cio.ru",
-      "",
+      "Новая заявка с сайта max-cio.ru", "",
       "Компания / отрасль: " + company,
-      "Контакт для ответа: " + contact,
-      "",
-      "Задача:",
+      "Контакт для ответа: " + contact, "", "Задача:",
       task
     ].join("\n");
 
-    let telegramSent = false;
-    let emailSent = false;
-
+    let telegramSent = false, emailSent = false;
     try {
       const token = PropertiesService.getScriptProperties().getProperty("TELEGRAM_BOT_TOKEN");
       if (!token) throw new Error("Telegram token is not configured");
-      const tgResponse = UrlFetchApp.fetch("https://api.telegram.org/bot" + token + "/sendMessage", {
-        method: "post",
-        contentType: "application/json",
-        payload: JSON.stringify({ chat_id: CONFIG.chatId, text: message, disable_web_page_preview: true }),
+      const response = UrlFetchApp.fetch("https://api.telegram.org/bot" + token + "/sendMessage", {
+        method: "post", contentType: "application/json",
+        payload: JSON.stringify({chat_id:CONFIG.chatId,text:message,disable_web_page_preview:true}),
         muteHttpExceptions: true
       });
-      const tg = JSON.parse(tgResponse.getContentText());
-      if (!tg.ok) throw new Error("Telegram delivery failed");
+      if (!JSON.parse(response.getContentText()).ok) throw new Error("Telegram delivery failed");
       telegramSent = true;
-    } catch (telegramError) {
-      console.error("Telegram delivery error: " + telegramError.message);
-    }
+    } catch (err) { console.error("Telegram delivery error: " + err.message); }
 
     try {
-      GmailApp.sendEmail(CONFIG.email, "Новая заявка с сайта max-cio.ru", message, {
-        name: "max-cio.ru"
-      });
+      GmailApp.sendEmail(CONFIG.email, "Новая заявка с сайта max-cio.ru", message, {name:"max-cio.ru"});
       emailSent = true;
-    } catch (emailError) {
-      console.error("Email delivery error: " + emailError.message);
-    }
+    } catch (err) { console.error("Email delivery error: " + err.message); }
 
     if (!telegramSent && !emailSent) throw new Error("Both notification channels failed");
     const confirmation = telegramSent && emailSent
@@ -82,12 +66,7 @@ function clean(value, maxLength) {
 }
 
 function resultPage(ok, message, nonce) {
-  const payload = JSON.stringify({
-    source: "max-cio-inquiry",
-    ok: ok,
-    message: message,
-    nonce: nonce || ""
-  });
+  const payload = JSON.stringify({source:"max-cio-inquiry",ok:ok,message:message,nonce:nonce || ""});
   const safeMessage = String(message).replace(/[&<>]/g, "");
   return HtmlService.createHtmlOutput(
     '<!doctype html><html><head><meta charset="utf-8"></head><body><script>' +
