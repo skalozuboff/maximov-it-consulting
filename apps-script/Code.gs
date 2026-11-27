@@ -19,6 +19,9 @@ function doPost(e) {
       return resultPage(false, "Заполните все поля корректно.", nonce);
     }
 
+    const captchaError = verifyCaptcha(data);
+    if (captchaError) return resultPage(false, captchaError, nonce);
+
     const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, contact.toLowerCase());
     const throttleKey = "last_" + Utilities.base64EncodeWebSafe(digest).slice(0, 32);
     const cache = CacheService.getScriptCache();
@@ -78,4 +81,33 @@ function resultPage(ok, message, nonce) {
 function authorizeServices() {
   GmailApp.getAliases();
   UrlFetchApp.fetch("https://api.telegram.org");
+}
+
+function doGet(e) {
+  if (!e || e.parameter.action !== "captcha") return HtmlService.createHtmlOutput("MAX-CIO");
+  const nonce = String(e.parameter.nonce || "");
+  if (!/^[a-f0-9]{32}$/.test(nonce)) return HtmlService.createHtmlOutput("Invalid request");
+  const a = 2 + Math.floor(Math.random() * 8);
+  const b = 2 + Math.floor(Math.random() * 8);
+  const id = Utilities.getUuid();
+  CacheService.getScriptCache().put("captcha_" + id, String(a+b), 600);
+  const payload = JSON.stringify({source:"max-cio-captcha",nonce:nonce,id:id,question:a+" + "+b+" = ?"});
+  return HtmlService.createHtmlOutput('<!doctype html><script>window.top.postMessage('+payload+',"https://max-cio.ru");</script>').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function verifyCaptcha(data) {
+  const id = String(data.captchaId || "");
+  const answer = String(data.captchaAnswer || "").trim();
+  if (!/^[a-f0-9-]{36}$/.test(id) || !/^\d{1,2}$/.test(answer)) return "Решите пример для защиты от спама.";
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) return "Повторите попытку.";
+  try {
+    const cache = CacheService.getScriptCache();
+    const key = "captcha_" + id;
+    const expected = cache.get(key);
+    cache.remove(key);
+    if (expected === null) return "Срок действия примера истёк. Решите новый пример.";
+    if (Number(answer) !== Number(expected)) return "Неверный ответ. Решите новый пример.";
+    return "";
+  } finally { lock.releaseLock(); }
 }

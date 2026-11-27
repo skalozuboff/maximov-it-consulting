@@ -47,18 +47,28 @@
 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.91 3.79 20.3 20.85c-.27 1.2-.98 1.5-1.98.94l-5.48-4.04-2.64 2.54c-.29.29-.53.53-1.09.53l.39-5.58L19.65 6.9c.43-.39-.09-.6-.67-.21L7.8 13.75l-5.42-1.7c-1.18-.37-1.2-1.18.25-1.75L21.9 2.04c.98-.36 1.84.24 1.52 1.75z"/></svg>
 <span><small>TELEGRAM</small><strong>@skalozuboff</strong></span>
 </a>
-</div><p>Или отправьте заявку через форму.</p></div><iframe name="inquiryReceiver" id="inquiryReceiver" title="Обработка заявки" style="display:none" aria-hidden="true"></iframe><form class="form" id="inquiry" action="https://script.google.com/macros/s/AKfycbyx_iPS56onCt70-0x3uGt9e9WR0Rl3VfoAo8L5bB4oYDzwPGd3ivrpvYhXAmZvtGyu/exec" method="POST" target="inquiryReceiver"><input type="text" name="website" style="display:none" tabindex="-1" autocomplete="off" aria-hidden="true"><input type="hidden" name="nonce" value=""><label for="company">Компания / отрасль</label><input id="company" class="ym-disable-keys" name="company" placeholder="Например, производственная компания" required maxlength="120"><label for="reply">Ваш контакт для ответа</label><input id="reply" class="ym-disable-keys" name="contact" placeholder="Email или Telegram" required maxlength="160"><label for="task">В чём задача?</label><textarea id="task" class="ym-disable-keys" name="task" placeholder="Коротко опишите ситуацию" required maxlength="3000"></textarea><button type="submit" id="sendInquiry">Отправить заявку ↗</button><p id="inquiryStatus" role="status" aria-live="polite" style="font-size:14px;margin:10px 0"></p><small>Заявка отправляется без перехода на другой сайт. Не указывайте пароли и конфиденциальные сведения.</small></form></div></section></main>
+</div><p>Или отправьте заявку через форму.</p></div><iframe name="inquiryReceiver" id="inquiryReceiver" title="Обработка заявки" style="display:none" aria-hidden="true"></iframe><form class="form" id="inquiry" action="https://script.google.com/macros/s/AKfycbyx_iPS56onCt70-0x3uGt9e9WR0Rl3VfoAo8L5bB4oYDzwPGd3ivrpvYhXAmZvtGyu/exec" method="POST" target="inquiryReceiver"><input type="text" name="website" style="display:none" tabindex="-1" autocomplete="off" aria-hidden="true"><input type="hidden" name="nonce" value=""><label for="company">Компания / отрасль</label><input id="company" class="ym-disable-keys" name="company" placeholder="Например, производственная компания" required maxlength="120"><label for="reply">Ваш контакт для ответа</label><input id="reply" class="ym-disable-keys" name="contact" placeholder="Email или Telegram" required maxlength="160"><label for="task">В чём задача?</label><textarea id="task" class="ym-disable-keys" name="task" placeholder="Коротко опишите ситуацию" required maxlength="3000"></textarea><iframe id="captchaReceiver" title="Получение проверочного примера" style="display:none" aria-hidden="true"></iframe><input type="hidden" name="captchaId"><label for="captchaAnswer">Защита от спама: <span id="captchaQuestion" aria-live="polite">Загрузка…</span></label><div style="display:flex;gap:10px;align-items:baseline"><input id="captchaAnswer" name="captchaAnswer" inputmode="numeric" pattern="[0-9]{1,2}" maxlength="2" autocomplete="off" required placeholder="Ответ"><button type="button" id="refreshCaptcha" style="white-space:nowrap">Обновить</button></div><button type="submit" id="sendInquiry" disabled>Отправить заявку ↗</button><p id="inquiryStatus" role="status" aria-live="polite" style="font-size:14px;margin:10px 0"></p><small>Заявка отправляется без перехода на другой сайт. Не указывайте пароли и конфиденциальные сведения.</small></form></div></section></main>
 <footer class="foot"><div class="container"><span>© <span id="year"></span> Андрей Максимов · Независимый ИТ-консалтинг</span><a href="mailto:info@max-cio.ru">Связаться по email</a></div></footer>
 <script>
 document.getElementById("year").textContent=new Date().getFullYear();
 const inquiry=document.getElementById("inquiry"), statusEl=document.getElementById("inquiryStatus"), sendBtn=document.getElementById("sendInquiry");
-let inquiryTimer=null, activeNonce="";
+let inquiryTimer=null, activeNonce="", captchaNonce="", captchaTimer=null, captchaReady=false;
+const captchaFrame=document.getElementById("captchaReceiver"), captchaQuestion=document.getElementById("captchaQuestion"), captchaAnswer=document.getElementById("captchaAnswer"), refreshCaptcha=document.getElementById("refreshCaptcha");
+function loadCaptcha(){
+  captchaReady=false;sendBtn.disabled=true;captchaAnswer.value="";inquiry.elements.captchaId.value="";captchaQuestion.textContent="Загрузка…";captchaNonce=makeNonce();
+  const url=new URL(inquiry.action);url.searchParams.set("action","captcha");url.searchParams.set("nonce",captchaNonce);captchaFrame.src=url.href;
+  clearTimeout(captchaTimer);captchaTimer=setTimeout(()=>{captchaQuestion.textContent="Не удалось загрузить пример. Нажмите «Обновить» или напишите на info@max-cio.ru.";},20000);
+}
+refreshCaptcha.addEventListener("click",()=>{if(!activeNonce)loadCaptcha();});
 function makeNonce(){
   const bytes=new Uint8Array(16);crypto.getRandomValues(bytes);
   return Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("");
 }
 window.addEventListener("message",(event)=>{
   const data=event.data;
+  if(data && data.source==="max-cio-captcha" && data.nonce===captchaNonce && /^https:\/\/(?:[a-z0-9-]+\.)*googleusercontent\.com$|^https:\/\/script\.google\.com$/.test(event.origin) && /^[a-f0-9-]{36}$/.test(data.id) && /^\d+ \+ \d+ = \?$/.test(data.question)){
+    clearTimeout(captchaTimer);captchaNonce="";captchaQuestion.textContent=data.question;inquiry.elements.captchaId.value=data.id;captchaReady=true;sendBtn.disabled=false;return;
+  }
   // Apps Script HTML Service can postMessage from a nested sandbox frame,
   // so event.source is not necessarily the outer form iframe.
   if(!data || data.source!=="max-cio-inquiry" || !activeNonce || data.nonce!==activeNonce)return;
@@ -70,6 +80,7 @@ window.addEventListener("message",(event)=>{
     if(typeof ym==="function")ym(114642472,"reachGoal","lead_sent");
     inquiry.reset();
   }
+  loadCaptcha();
 });
 document.addEventListener("click",(event)=>{
   const link=event.target.closest("a[href]");
@@ -78,6 +89,7 @@ document.addEventListener("click",(event)=>{
 });
 
 inquiry.addEventListener("submit",(event)=>{
+  if(!captchaReady || activeNonce){event.preventDefault();return;}
   if(!inquiry.reportValidity()){event.preventDefault();return;}
   activeNonce=makeNonce();
   inquiry.elements.namedItem("nonce").value=activeNonce;
@@ -89,6 +101,8 @@ inquiry.addEventListener("submit",(event)=>{
     sendBtn.disabled=false;sendBtn.textContent="Отправить заявку ↗";
     statusEl.textContent="Не удалось получить подтверждение. Заявка могла быть принята — перед повторной отправкой проверьте почту или Telegram.";
     statusEl.style.color="#a13737";
+    loadCaptcha();
   },30000);
 });
+loadCaptcha();
 </script></body></html>
